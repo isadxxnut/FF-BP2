@@ -210,12 +210,10 @@
             const firebaseConfig = {
                 apiKey: "AIzaSyCZiuUWpQWF-Lh8lpGyrgYufuwnL-izhaI",
                 authDomain: "ff-banpick.firebaseapp.com",
-                databaseURL: "https://ff-banpick-default-rtdb.asia-southeast1.firebasedatabase.app",
                 projectId: "ff-banpick",
                 storageBucket: "ff-banpick.appspot.com",
                 messagingSenderId: "545442759317",
-                appId: "1:545442759317:web:82459968922c923042d19c",
-                measurementId: "G-56P69RCMSK"
+                appId: "1:545442759317:web:82459968922c923042d19c"
             };
             // ^^^^^^ PASTE YOUR FIREBASE CONFIG OBJECT HERE ^^^^^^
 
@@ -312,6 +310,8 @@
                     // Real-time listener for state changes
                     onSnapshot(stateDocRef, (doc) => {
                         console.log("Firestore data received:", doc.data());
+                        const previousState = JSON.parse(JSON.stringify(this.state || {}));
+                        
                         if (doc.exists()) {
                             this.state = doc.data();
                         } else {
@@ -319,7 +319,9 @@
                         }
                         
                         if (this.isReferee) {
-                            this.updateRefereeView();
+                             if (JSON.stringify(previousState) !== JSON.stringify(this.state)) {
+                                this.updateRefereeView();
+                            }
                         } else {
                             this.updateTeamView();
                         }
