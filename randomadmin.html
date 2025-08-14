@@ -200,7 +200,7 @@
     <script type="module">
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -208,15 +208,15 @@
             // --- FIREBASE SETUP ---
             // VVVVVV PASTE YOUR FIREBASE CONFIG OBJECT HERE VVVVVV
             const firebaseConfig = {
-  apiKey: "AIzaSyCZiuUWpQWF-Lh8lpGyrgYufuwnL-izhaI",
-  authDomain: "ff-banpick.firebaseapp.com",
-  databaseURL: "https://ff-banpick-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "ff-banpick",
-  storageBucket: "ff-banpick.firebasestorage.app",
-  messagingSenderId: "545442759317",
-  appId: "1:545442759317:web:82459968922c923042d19c",
-  measurementId: "G-56P69RCMSK"
-};
+                apiKey: "AIzaSyCZiuUWpQWF-Lh8lpGyrgYufuwnL-izhaI",
+                authDomain: "ff-banpick.firebaseapp.com",
+                databaseURL: "https://ff-banpick-default-rtdb.asia-southeast1.firebasedatabase.app",
+                projectId: "ff-banpick",
+                storageBucket: "ff-banpick.appspot.com",
+                messagingSenderId: "545442759317",
+                appId: "1:545442759317:web:82459968922c923042d19c",
+                measurementId: "G-56P69RCMSK"
+            };
             // ^^^^^^ PASTE YOUR FIREBASE CONFIG OBJECT HERE ^^^^^^
 
             let db;
@@ -225,15 +225,14 @@
                 const auth = getAuth(firebaseApp);
                 db = getFirestore(firebaseApp);
                 await signInAnonymously(auth);
+                console.log("Firebase Authenticated Anonymously");
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
-                // If Firebase fails, we can't proceed.
-                // You might want to show an error message to the user.
-                document.body.innerHTML = '<div class="text-white text-center p-8">Error: Could not connect to the database. Please check your Firebase configuration.</div>';
+                document.body.innerHTML = `<div class="text-white text-center p-8">Error: Could not connect to the database. Please check your Firebase configuration and authorized domains.</div>`;
                 return;
             }
             
-            const docId = "tournamentState"; // Using a fixed ID for simplicity
+            const docId = "tournamentState";
             const stateDocRef = doc(db, "randomizer", docId);
 
             const app = {
@@ -312,6 +311,7 @@
                     
                     // Real-time listener for state changes
                     onSnapshot(stateDocRef, (doc) => {
+                        console.log("Firestore data received:", doc.data());
                         if (doc.exists()) {
                             this.state = doc.data();
                         } else {
@@ -329,7 +329,12 @@
                 // --- STATE MANAGEMENT ---
                 async saveState() {
                     if (!this.isReferee) return;
-                    await setDoc(stateDocRef, this.state);
+                    try {
+                        await setDoc(stateDocRef, this.state);
+                        console.log("State saved to Firestore");
+                    } catch (error) {
+                        console.error("Error saving state to Firestore:", error);
+                    }
                 },
 
                 getDefaultState() {
