@@ -310,8 +310,6 @@
                     // Real-time listener for state changes
                     onSnapshot(stateDocRef, (doc) => {
                         console.log("Firestore data received:", doc.data());
-                        const previousState = JSON.parse(JSON.stringify(this.state || {}));
-                        
                         if (doc.exists()) {
                             this.state = doc.data();
                         } else {
@@ -319,9 +317,7 @@
                         }
                         
                         if (this.isReferee) {
-                             if (JSON.stringify(previousState) !== JSON.stringify(this.state)) {
-                                this.updateRefereeView();
-                            }
+                            this.updateRefereeView();
                         } else {
                             this.updateTeamView();
                         }
