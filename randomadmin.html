@@ -298,16 +298,18 @@
                     
                     // Real-time listener for state changes
                     onSnapshot(stateDocRef, (doc) => {
+                        const previousState = JSON.parse(JSON.stringify(this.state)); // Deep copy for comparison
                         if (doc.exists()) {
                             this.state = doc.data();
                         } else {
-                            // Document was deleted (reset)
                             this.state = this.getDefaultState();
                         }
                         
-                        // Update the relevant view
                         if (this.isReferee) {
-                            this.updateRefereeView();
+                            // Only re-render if the mode has changed, not for other updates we triggered
+                            if (previousState.mode !== this.state.mode) {
+                                this.updateRefereeView();
+                            }
                         } else {
                             this.updateTeamView();
                         }
@@ -316,7 +318,6 @@
                 
                 // --- STATE MANAGEMENT ---
                 async saveState() {
-                    // Only the referee can save the state
                     if (!this.isReferee) return;
                     await setDoc(stateDocRef, this.state);
                 },
@@ -352,6 +353,7 @@
 
                     this.populateMapSelection(this.ui.brMapSelection);
                     this.populateMapSelection(this.ui.csMapSelection);
+                    this.updateRefereeView(); // Initial render
                 },
                 
                 setMode(mode) {
