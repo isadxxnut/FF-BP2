@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drag & Drop Style Editor</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            background-color: #2c3e50; 
+            color: #ecf0f1; 
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .main-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+        #preview-area {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow: auto;
+            background-color: #212f3d;
+        }
+        #preview-container {
+            width: 1920px;
+            height: 1080px;
+            transform-origin: top left;
+            position: relative;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+        .draggable {
+            position: absolute !important;
+            border: 1px dashed rgba(255, 255, 255, 0.5);
+            box-sizing: border-box;
+            cursor: move;
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 5px;
+        }
+        .draggable.selected {
+            border: 2px solid #f1c40f;
+            box-shadow: 0 0 15px rgba(241, 196, 15, 0.8);
+        }
+        .draggable.interact-resizing {
+             border: 2px solid #1abc9c;
+        }
+        .draggable[id*="-img"] {
+            background-color: rgba(0,0,0,0.2);
+        }
+
+        #sidebar {
+            width: 350px;
+            min-width: 350px;
+            background-color: #34495e;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .control-group { margin-bottom: 20px; }
+        h1, h2, h3 { text-align: center; }
+        h2 { color: #1abc9c; border-bottom: 2px solid #1abc9c; padding-bottom: 5px; margin-top: 0;}
+        h3 { color: #e67e22; margin-top: 20px; }
+        .control { margin-bottom: 10px; }
+        .control label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="color"], input[type="number"] { width: calc(100% - 12px); padding: 5px; border-radius: 4px; border: none; background-color: #2c3e50; color: #ecf0f1;}
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+    <div id="preview-area">
+        <div id="preview-container">
+            <!-- Draggable elements will be generated here -->
+        </div>
+    </div>
+    <div id="sidebar">
+        <h1>Style Editor</h1>
+        <div class="control-group">
+            <h2>General</h2>
+            <div class="control">
+                <label for="background-url">Background Image URL</label>
+                <input type="text" id="background-url" data-element="background" data-property="backgroundImage">
+            </div>
+            <div class="control">
+                <label for="font-family">Font Family</label>
+                <input type="text" id="font-family" data-element="font" data-property="fontFamily">
+            </div>
+        </div>
+        <div id="sidebar-controls">
+            <!-- Controls for selected element will be generated here -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // Firebase configuration
+    if (!firebase.apps.length) {
+const firebaseConfig = {
+  apiKey: "AIzaSyDPOcVxH2phLkliimotnr9rSRSQwBzK4oI",
+  authDomain: "ff-bp2.firebaseapp.com",
+  databaseURL: "https://ff-bp2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "ff-bp2",
+  storageBucket: "ff-bp2.firebasestorage.app",
+  messagingSenderId: "300310417780",
+  appId: "1:300310417780:web:208619423dbd41e2259c21",
+  measurementId: "G-H40DY7H1YJ"
+};
+
+        firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.database();
+    const stylesRef = db.ref("drafts/room1/styles");
+
+    const allElementIds = ["timer", "actionLabel", "reserveA", "reserveB", "reserve-label", "A0-img", "A0-char-name", "B0-img", "B0-char-name", "A1-img", "A1-char-name", "A1-player-name", "A2-img", "A2-char-name", "A2-player-name", "A3-img", "A3-char-name", "A3-player-name", "A4-img", "A4-char-name", "A4-player-name", "B1-img", "B1-char-name", "B1-player-name", "B2-img", "B2-char-name", "B2-player-name", "B3-img", "B3-char-name", "B3-player-name", "B4-img", "B4-char-name", "B4-player-name"];
+    const BASE_FONT_SIZE = 10;
+    let currentStyles = {};
+
+    function resizePreview() {
+        const previewArea = document.getElementById('preview-area');
+        const previewContainer = document.getElementById('preview-container');
+        const areaWidth = previewArea.clientWidth;
+        const areaHeight = previewArea.clientHeight;
+        const scale = Math.min((areaWidth - 40) / 1920, (areaHeight - 40) / 1080);
+        previewContainer.style.transform = `scale(${scale})`;
+    }
+
+    function updateFirebaseStyle(elementId, property, value) {
+        stylesRef.child(elementId).child(property).set(value);
+    }
+
+    function createDraggableElements() {
+        const container = document.getElementById('preview-container');
+        allElementIds.forEach(id => {
+            const el = document.createElement('div');
+            el.id = `preview-${id}`;
+            el.className = 'draggable';
+            
+            // Add placeholder content
+            if (id.endsWith('-img')) el.textContent = `Image (${id.split('-')[0]})`;
+            else if (id.endsWith('-char-name')) el.textContent = 'Character';
+            else if (id.endsWith('-player-name')) el.textContent = 'Player';
+            else el.textContent = id;
+
+            el.dataset.elementId = id;
+            container.appendChild(el);
+        });
+    }
+
+    function generateSidebarControls(elementId) {
+        const sidebar = document.getElementById('sidebar-controls');
+        const styles = currentStyles[elementId] || {};
+        const isTextElement = !elementId.endsWith('-img');
+
+        let controlsHtml = `<div class="control-group" id="selected-controls"><h2>Selected: ${elementId}</h2>`;
+
+        if (isTextElement) {
+            controlsHtml += `
+                <div class="control">
+                    <label>Font Size (rem)</label>
+                    <input type="number" step="0.1" value="${parseFloat(styles.fontSize) || 1}" data-property="fontSize" data-unit="rem">
+                </div>
+                <div class="control">
+                    <label>Font Weight</label>
+                    <input type="number" step="100" min="100" max="900" value="${parseInt(styles.fontWeight) || 400}" data-property="fontWeight">
+                </div>
+                <div class="control">
+                    <label>Color</label>
+                    <input type="color" value="${styles.color || '#ffffff'}" data-property="color">
+                </div>`;
+        }
+        
+        controlsHtml += `</div>`;
+        sidebar.innerHTML = controlsHtml;
+
+        document.querySelectorAll('#selected-controls input').forEach(input => {
+            input.addEventListener('input', (e) => {
+                let value = e.target.value;
+                if(e.target.dataset.unit === 'rem') value += 'rem';
+                updateFirebaseStyle(elementId, e.target.dataset.property, value);
+            });
+        });
+    }
+
+    function setupInteractions() {
+        interact('.draggable')
+            .on('tap', function (event) {
+                document.querySelectorAll('.draggable').forEach(el => el.classList.remove('selected'));
+                event.currentTarget.classList.add('selected');
+                generateSidebarControls(event.currentTarget.dataset.elementId);
+            })
+            .draggable({
+                listeners: {
+                    move(event) {
+                        const target = event.target;
+                        const elementId = target.dataset.elementId;
+                        const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                        const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+                        target.style.transform = `translate(${x}px, ${y}px)`;
+                        target.setAttribute('data-x', x);
+                        target.setAttribute('data-y', y);
+                        
+                        const leftRem = (x / BASE_FONT_SIZE).toFixed(2);
+                        const topRem = (y / BASE_FONT_SIZE).toFixed(2);
+
+                        updateFirebaseStyle(elementId, 'left', `${leftRem}rem`);
+                        updateFirebaseStyle(elementId, 'top', `${topRem}rem`);
+                    }
+                }
+            })
+            .resizable({
+                edges: { left: true, right: true, bottom: true, top: true },
+                listeners: {
+                    move: function (event) {
+                        const target = event.target;
+                        target.style.width = `${event.rect.width}px`;
+                        target.style.height = `${event.rect.height}px`;
+                        
+                        const elementId = target.dataset.elementId;
+                        updateFirebaseStyle(elementId, 'width', `${(event.rect.width / BASE_FONT_SIZE).toFixed(2)}rem`);
+                        updateFirebaseStyle(elementId, 'height', `${(event.rect.height / BASE_FONT_SIZE).toFixed(2)}rem`);
+                    }
+                }
+            });
+    }
+
+    function updatePreviewStyles(styles) {
+        if (!styles) return;
+        currentStyles = styles; // Store for sidebar generation
+
+        if (styles.background && styles.background.backgroundImage) {
+            document.getElementById('preview-container').style.backgroundImage = styles.background.backgroundImage;
+        }
+        if (styles.font && styles.font.fontFamily) {
+            document.getElementById('preview-container').style.fontFamily = styles.font.fontFamily;
+        }
+
+        allElementIds.forEach(id => {
+            const el = document.getElementById(`preview-${id}`);
+            if (el && styles[id]) {
+                const styleData = styles[id];
+                const x = (parseFloat(styleData.left) || 0) * BASE_FONT_SIZE;
+                const y = (parseFloat(styleData.top) || 0) * BASE_FONT_SIZE;
+                
+                Object.assign(el.style, {
+                    width: styleData.width || 'auto',
+                    height: styleData.height || 'auto',
+                    fontSize: styleData.fontSize || '2rem',
+                    color: styleData.color || '#ffffff',
+                    fontWeight: styleData.fontWeight || 'normal',
+                    transform: `translate(${x}px, ${y}px)`
+                });
+                el.setAttribute('data-x', x);
+                el.setAttribute('data-y', y);
+            }
+        });
+    }
+    
+    document.querySelectorAll('#sidebar input[data-element]').forEach(input => {
+        input.addEventListener('input', (e) => {
+             const element = e.target.dataset.element;
+             const property = e.target.dataset.property;
+             let value = e.target.value;
+             if (property === 'backgroundImage') {
+                value = value ? `url('${value}')` : '';
+             }
+             updateFirebaseStyle(element, property, value);
+        });
+    });
+
+    // Initial Load
+    window.addEventListener('resize', resizePreview);
+    createDraggableElements();
+    setupInteractions();
+    resizePreview();
+
+    stylesRef.on('value', (snapshot) => {
+        const styles = snapshot.val();
+        updatePreviewStyles(styles);
+        
+        const bgUrlInput = document.getElementById('background-url');
+        const fontInput = document.getElementById('font-family');
+        if(styles && styles.background && styles.background.backgroundImage) {
+            bgUrlInput.value = styles.background.backgroundImage.replace(/url\(['"]?(.*?)['"]?\)/i, '$1');
+        }
+        if(styles && styles.font && styles.font.fontFamily) {
+            fontInput.value = styles.font.fontFamily;
+        }
+    });
+
+</script>
+</body>
+</html>
